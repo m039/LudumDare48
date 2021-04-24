@@ -2,10 +2,21 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using m039.Common;
+using System;
 
 public class Rope : MonoBehaviour
 {
+    static int _sNumberOfLinks = 0;
+
     const int NumberOfJoints = 100;
+
+    const int NumberToElongate = 50;
+
+    const float DefaultMass = 0.5f;
+
+    const float Force = 1000f;
+
+    float AnchorWidth = 1.0f / NumberOfJoints;
 
     public Socket socketPrefab;
 
@@ -21,9 +32,11 @@ public class Rope : MonoBehaviour
 
     GameObject _linksParent;
 
-    readonly Vector3[] _jointPositions = new Vector3[NumberOfJoints];
+    Vector3[] _jointPositions;
 
     bool _reverse = false;
+
+    readonly List<GameObject> _links = new List<GameObject>();
 
     void Start()
     {
@@ -34,35 +47,49 @@ public class Rope : MonoBehaviour
 
         for (int i = 0; i < NumberOfJoints; i++)
         {
-            var link = new GameObject("Link " + i);
-            link.transform.SetParent(_linksParent.transform);
-            link.layer = 3;
+            var link = CreateLink("Link ", previousRigidBody);
 
-            var rigidBody = link.AddComponent<Rigidbody2D>();
-            rigidBody.gravityScale = 0;
-            rigidBody.mass = 1;
-            rigidBody.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+            _links.Add(link);
 
-            var collider = link.AddComponent<CircleCollider2D>();
-            collider.radius = lineRednerer.startWidth / 2f;
-
-            var hingeJoint = link.AddComponent<HingeJoint2D>();
-            hingeJoint.connectedBody = previousRigidBody;
-            hingeJoint.enableCollision = true;
-            hingeJoint.autoConfigureConnectedAnchor = false;
-            hingeJoint.connectedAnchor = new Vector2(0f, 10f / NumberOfJoints);
-
-            previousRigidBody = rigidBody;
+            previousRigidBody = link.GetComponent<Rigidbody2D>();
         }
 
         endRigidBody.GetComponent<HingeJoint2D>().connectedBody = previousRigidBody;
         endRigidBody.transform.position = startRigidBody.transform.position;
         endRigidBody.velocity = Vector2.zero;
         endRigidBody.angularVelocity = 0;
+
+        endRigidBody.mass = startRigidBody.mass = DefaultMass;
     }
 
-    void Update()
+    GameObject CreateLink(string name, Rigidbody2D connectedBody)
     {
+        var link = new GameObject(name + " " + _sNumberOfLinks++);
+        link.transform.SetParent(_linksParent.transform);
+        link.layer = 3;
+
+        var rigidBody = link.AddComponent<Rigidbody2D>();
+        rigidBody.gravityScale = 0;
+        rigidBody.mass = DefaultMass;
+        rigidBody.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+        rigidBody.interpolation = RigidbodyInterpolation2D.Interpolate;
+
+        var collider = link.AddComponent<CircleCollider2D>();
+        collider.radius = lineRednerer.startWidth / 2f;
+
+        var hingeJoint = link.AddComponent<HingeJoint2D>();
+        hingeJoint.connectedBody = connectedBody;
+        hingeJoint.enableCollision = true;
+        hingeJoint.autoConfigureConnectedAnchor = false;
+        hingeJoint.connectedAnchor = new Vector2(0f, AnchorWidth);
+
+        return link;
+    }
+
+    void FixedUpdate()
+    {
+        // Add force on mouse button down.
+
         if (Input.GetMouseButton(0))
         {
             var endRb = _reverse ? startRigidBody : endRigidBody;
@@ -70,28 +97,30 @@ public class Rope : MonoBehaviour
             var p = Camera.main.ScreenToWorldPoint(Input.mousePosition);
             var direction = (p - endRb.transform.position).normalized;
 
-            endRb.AddForce(direction * 100f, ForceMode2D.Force);
+            endRb.AddForce(direction * Force, ForceMode2D.Force);
 
-            //endRigidBody.MovePosition(p);
+            //endRb.MovePosition(p);
         }
-    }
 
-    void FixedUpdate()
-    {
-        for (int i = 0; i < NumberOfJoints; i++)
+        // Update line renderer.
+
+        if (_jointPositions == null || _jointPositions.Length != _links.Count)
         {
-            var child = _linksParent.transform.GetChild(i);
-
-            _jointPositions[i] = child.transform.position;
+            _jointPositions = new Vector3[_links.Count];
         }
 
-        lineRednerer.positionCount = NumberOfJoints;
+        for (int i = 0; i < _links.Count; i++)
+        {
+            _jointPositions[i] = _links[i].transform.position;
+        }
+
+        lineRednerer.positionCount = _jointPositions.Length;
         lineRednerer.SetPositions(_jointPositions);
 
         var endR = _reverse ? startRenderer : endRenderer;
         var starR = _reverse ? endRenderer : startRenderer;
 
-        endR.transform.position = _jointPositions[NumberOfJoints - 1];
+        endR.transform.position = _jointPositions[_jointPositions.Length - 1];
         starR.transform.position = _jointPositions[0];
     }
 
@@ -112,13 +141,15 @@ public class Rope : MonoBehaviour
 
         startRb.isKinematic = false;
         startRb.mass = endRb.mass;
+        startRb.velocity = Vector2.zero;
+        startRb.angularVelocity = 0;
         startHinge.enabled = true;
 
         var previousRigidBody = endRb;
 
         System.Action<int> updateChild = (index) =>
         {
-            var child = _linksParent.transform.GetChild(index);
+            var child = _links[index];
             var rigidbody = child.GetComponent<Rigidbody2D>();
 
             var hingeJoint = child.GetComponent<HingeJoint2D>();
@@ -129,13 +160,13 @@ public class Rope : MonoBehaviour
 
         if (_reverse)
         {
-            for (int i = 0; i < NumberOfJoints; i++)
+            for (int i = 0; i < _links.Count; i++)
             {
                 updateChild(i);
             }
         } else
         {
-            for (int i = NumberOfJoints - 1; i >= 0; i--)
+            for (int i = _links.Count - 1; i >= 0; i--)
             {
                 updateChild(i);
             }
@@ -148,5 +179,54 @@ public class Rope : MonoBehaviour
         var newSocket = Instantiate(socketPrefab);
         newSocket.transform.position = previousSocketPosition;
         newSocket.Appear = true;
+    }
+
+    public Vector2 GetCenterOfMass()
+    {
+        return (startRigidBody.transform.position + endRigidBody.transform.position) / 2;
+    }
+
+    public void Elongate()
+    {
+        if (!_reverse)
+        {
+            var previousRigidBody = _links[_links.Count - 1].GetComponent<Rigidbody2D>();
+
+            for (int i = 0; i < NumberToElongate; i++)
+            {
+                var link = CreateLink("New Link+", previousRigidBody);
+
+                link.transform.position = endRigidBody.transform.position;
+
+                _links.Add(link);
+
+                previousRigidBody = link.GetComponent<Rigidbody2D>();
+            }
+
+            endRigidBody.GetComponent<HingeJoint2D>().connectedBody = previousRigidBody;
+        } else
+        {
+            var previousRigidBody = _links[0].GetComponent<Rigidbody2D>();
+            var newLinks = new List<GameObject>();
+
+            for (int i = 0; i < NumberToElongate; i++)
+            {
+                var link = CreateLink("New Link-", previousRigidBody);
+
+                link.transform.position = startRigidBody.transform.position;
+
+                newLinks.Add(link);
+
+                previousRigidBody = link.GetComponent<Rigidbody2D>();
+            }
+
+            newLinks.Reverse();
+
+            startRigidBody.GetComponent<HingeJoint2D>().connectedBody = previousRigidBody;// newLinks[0].GetComponent<Rigidbody2D>();
+
+            newLinks.AddRange(_links);
+            _links.Clear();
+            _links.AddRange(newLinks);
+        }
     }
 }
