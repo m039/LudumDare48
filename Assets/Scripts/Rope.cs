@@ -12,11 +12,11 @@ public class Rope : MonoBehaviour
 
     const int NumberToElongate = 50;
 
-    const float DefaultMass = 0.5f;
+    const float DefaultMass = 0.01f;
 
-    const float Force = 1000f;
+    const float Force = 20.1f;
 
-    float AnchorWidth = 1.0f / NumberOfJoints;
+    float AnchorWidth = 10f / NumberOfJoints;
 
     public Socket socketPrefab;
 
@@ -70,19 +70,20 @@ public class Rope : MonoBehaviour
 
         var rigidBody = link.AddComponent<Rigidbody2D>();
         rigidBody.gravityScale = 0;
+        rigidBody.angularDrag = 1f;
+        rigidBody.drag = 3f;
         rigidBody.mass = DefaultMass;
         rigidBody.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-        rigidBody.interpolation = RigidbodyInterpolation2D.Interpolate;
+        //rigidBody.interpolation = RigidbodyInterpolation2D.Interpolate;
 
         var collider = link.AddComponent<CircleCollider2D>();
         collider.radius = lineRednerer.startWidth / 2f;
 
-        var hingeJoint = link.AddComponent<HingeJoint2D>();
-        hingeJoint.connectedBody = connectedBody;
-        hingeJoint.enableCollision = true;
-        hingeJoint.autoConfigureConnectedAnchor = false;
-        hingeJoint.connectedAnchor = new Vector2(0f, AnchorWidth);
-
+        var joint = link.AddComponent<HingeJoint2D>();
+        joint.connectedBody = connectedBody;
+        joint.enableCollision = false;
+        joint.autoConfigureConnectedAnchor = false;
+        joint.connectedAnchor = new Vector2(0f, AnchorWidth);
         return link;
     }
 
@@ -97,9 +98,11 @@ public class Rope : MonoBehaviour
             var p = Camera.main.ScreenToWorldPoint(Input.mousePosition);
             var direction = (p - endRb.transform.position).normalized;
 
+#if true
             endRb.AddForce(direction * Force, ForceMode2D.Force);
-
-            //endRb.MovePosition(p);
+#else
+            endRb.MovePosition(p);
+#endif
         }
 
         // Update line renderer.
@@ -127,9 +130,9 @@ public class Rope : MonoBehaviour
     public void Reconnect(Socket socket)
     {
         var startRb = _reverse? endRigidBody : startRigidBody;
-        var startHinge = startRb.GetComponent<HingeJoint2D>();
+        var startHinge = startRb.GetComponent<Joint2D>();
         var endRb = _reverse? startRigidBody: endRigidBody;
-        var endHinge = endRb.GetComponent<HingeJoint2D>();
+        var endHinge = endRb.GetComponent<Joint2D>();
 
         endRb.isKinematic = true;
         endRb.transform.position = socket.transform.position;
@@ -152,7 +155,7 @@ public class Rope : MonoBehaviour
             var child = _links[index];
             var rigidbody = child.GetComponent<Rigidbody2D>();
 
-            var hingeJoint = child.GetComponent<HingeJoint2D>();
+            var hingeJoint = child.GetComponent<Joint2D>();
             hingeJoint.connectedBody = previousRigidBody;
 
             previousRigidBody = rigidbody;
@@ -203,7 +206,7 @@ public class Rope : MonoBehaviour
                 previousRigidBody = link.GetComponent<Rigidbody2D>();
             }
 
-            endRigidBody.GetComponent<HingeJoint2D>().connectedBody = previousRigidBody;
+            endRigidBody.GetComponent<Joint2D>().connectedBody = previousRigidBody;
         } else
         {
             var previousRigidBody = _links[0].GetComponent<Rigidbody2D>();
@@ -222,7 +225,7 @@ public class Rope : MonoBehaviour
 
             newLinks.Reverse();
 
-            startRigidBody.GetComponent<HingeJoint2D>().connectedBody = previousRigidBody;// newLinks[0].GetComponent<Rigidbody2D>();
+            startRigidBody.GetComponent<Joint2D>().connectedBody = previousRigidBody;// newLinks[0].GetComponent<Rigidbody2D>();
 
             newLinks.AddRange(_links);
             _links.Clear();
