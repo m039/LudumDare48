@@ -55,7 +55,7 @@ public class Rope : MonoBehaviour
         }
 
         endRigidBody.GetComponent<HingeJoint2D>().connectedBody = previousRigidBody;
-        endRigidBody.transform.position = startRigidBody.transform.position;
+        _linksParent.transform.position = endRigidBody.transform.position = startRigidBody.transform.position = transform.position;
         endRigidBody.velocity = Vector2.zero;
         endRigidBody.angularVelocity = 0;
 
