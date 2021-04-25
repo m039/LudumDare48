@@ -30,6 +30,8 @@ public class Rope : MonoBehaviour
 
     public SpriteRenderer endRenderer;
 
+    public int numberOfJoints = NumberOfJoints;
+
     GameObject _linksParent;
 
     Vector3[] _jointPositions;
@@ -45,7 +47,7 @@ public class Rope : MonoBehaviour
 
         var previousRigidBody = startRigidBody;
 
-        for (int i = 0; i < NumberOfJoints; i++)
+        for (int i = 0; i < numberOfJoints; i++)
         {
             var link = CreateLink("Link ", previousRigidBody);
 
@@ -60,6 +62,8 @@ public class Rope : MonoBehaviour
         endRigidBody.angularVelocity = 0;
 
         endRigidBody.mass = startRigidBody.mass = DefaultMass;
+
+        RecalculateMass();
     }
 
     GameObject CreateLink(string name, Rigidbody2D connectedBody)
@@ -74,6 +78,7 @@ public class Rope : MonoBehaviour
         rigidBody.drag = 3f;
         rigidBody.mass = DefaultMass;
         rigidBody.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+        //rigidBody.constraints = RigidbodyConstraints2D.FreezeRotation;
         //rigidBody.interpolation = RigidbodyInterpolation2D.Interpolate;
 
         var collider = link.AddComponent<CircleCollider2D>();
@@ -81,7 +86,7 @@ public class Rope : MonoBehaviour
 
         var joint = link.AddComponent<HingeJoint2D>();
         joint.connectedBody = connectedBody;
-        joint.enableCollision = false;
+        joint.enableCollision = true;
         joint.autoConfigureConnectedAnchor = false;
         joint.connectedAnchor = new Vector2(0f, AnchorWidth);
         return link;
@@ -189,6 +194,8 @@ public class Rope : MonoBehaviour
         return (startRigidBody.transform.position + endRigidBody.transform.position) / 2;
     }
 
+    public int LinksCount => _links.Count;
+
     public void Elongate()
     {
         if (!_reverse)
@@ -231,5 +238,23 @@ public class Rope : MonoBehaviour
             _links.Clear();
             _links.AddRange(newLinks);
         }
+
+        RecalculateMass();
+    }
+
+    void RecalculateMass()
+    {
+#if false
+        const float mass = 102 * DefaultMass;
+        float count = 2 + _links.Count;
+        float oneMass = mass / count;
+
+        for (int i = 0; i < _links.Count; i++)
+        {
+            _links[i].GetComponent<Rigidbody2D>().mass = oneMass;
+        }
+
+        endRigidBody.mass = startRigidBody.mass = oneMass;
+#endif
     }
 }
